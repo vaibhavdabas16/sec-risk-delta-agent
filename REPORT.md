@@ -165,22 +165,23 @@ that multi-company parallel execution should be part of any future
 test harness, as it creates conditions — rate pressure, failure paths,
 encoding edge cases — that single sequential runs do not.
 
-An LLM (Claude) was used in a limited and specific capacity during
-development. The agent's domain (SEC 10-K risk delta analysis), the
-six-step chain architecture, the choice of tool calls at Steps 2 and
-5, the Pydantic state design, and all prompt engineering decisions
-were conceived and designed independently. The LLM was used only for
-two low-level tasks: generating boilerplate code (initial Pydantic
-model field definitions, argparse setup, file I/O scaffolding) and
-assisting with debugging specific errors (the Windows Unicode crash
-and the regex match logic for the TOC bug). In both cases the
-generated output required correction — the Pydantic boilerplate
-omitted the add_error() helper and to_json() serialiser entirely,
-and the regex suggestion anchored on "Item 1A." with a mandatory
-period, missing the uppercase ITEM 1A variant used by several large
-filers. The chain design, step decomposition, prompt iteration
-strategy, and all architectural decisions throughout this project
-reflect independent reasoning, not LLM-generated suggestions.
+The vast majority of the code in this project was written independently.
+An LLM (Claude) was consulted in a limited and peripheral capacity —
+primarily for understanding how to call third-party APIs (Tavily, the
+OpenAI structured-output API) and for generating small pieces of
+boilerplate (initial Pydantic model field definitions, argparse setup,
+file I/O scaffolding). The agent's domain (SEC 10-K risk delta
+analysis), the six-step chain architecture, the choice of tool calls
+at Steps 2 and 5, the Pydantic state design, all prompt engineering
+decisions, and all business logic were conceived, designed, and
+implemented independently. Where LLM-generated output was used, it
+required correction before it worked — the Pydantic boilerplate
+omitted the add_error() helper and to_json() serialiser entirely, and
+a regex suggestion anchored on "Item 1A." with a mandatory period,
+missing the uppercase ITEM 1A variant used by several large filers.
+The chain design, step decomposition, prompt iteration strategy, and
+all reasoning throughout this project reflect independent thinking,
+not LLM-generated suggestions.
 
 ---
 
