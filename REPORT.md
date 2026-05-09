@@ -24,16 +24,11 @@ synthesis (writing a coherent, investor-facing narrative from a structured diff 
 news evidence). Collapsing all three into one prompt consistently produces degenerate results
 in testing: the model loses track of individual risk identities during comparison, produces
 false additions and removals for risks that merely received cosmetic rewording, and mixes
-low-level extraction with high-level synthesis in ways that make both unreliable. Multi-step
-chaining solves this by giving each operation a separate context window, a precisely shaped
-prompt, and strongly typed structured outputs that prevent ambiguity from propagating forward.
+low-level extraction with high-level synthesis in ways that make both unreliable.
 
 ---
 
 ## 2. Chain Design
-
-The agent runs six steps in sequence. Each step receives structured output from its predecessor
-as part of its input context; no step can execute without the output of the step before it.
 
 **Step 1 (LLM — Normalizer)** receives the raw user-supplied string and returns a
 `TickerInfo` object containing a canonical uppercase ticker, the full company name, and a
@@ -66,13 +61,10 @@ parse two years of dense text and reason about cross-year equivalence — a mult
 where both objectives suffer.
 
 **Step 5 (Tool — News Search)** reads the diff output, filters to risks with verdict "added"
-or "materially\_changed", and issues one news search query per risk against the Tavily API
-(with a DuckDuckGo HTML scraping fallback if the Tavily key is absent or the quota is
-exhausted). This step is a tool call because the LLM has no access to
+or "materially\_changed", and issues one news search query per risk against the Tavily API. This step is a tool call because the LLM has no access to
 current events: asking it to produce news evidence would produce hallucinated citations.
 
-**Step 6 (LLM — Synthesizer + Critic)** receives the entire accumulated state — company
-metadata, filing years, the full diff with rationales, and the news evidence — and produces
+**Step 6 (LLM — Synthesizer + Critic)** receives the entire accumulated state and produces
 two outputs in a single call: the formatted investor-ready markdown memo and a structured list
 of confidence assessments (High, Medium, or Low) for each material risk, based on an explicit
 rubric applied to the news evidence.
@@ -87,17 +79,12 @@ limit fee and requires no API key, making it accessible without registration. Th
 the filing submission index for a given CIK, identifies the two most recent 10-K forms,
 downloads their full HTML, and extracts the Item 1A section using regex anchors on the cleaned
 plain text. Its output enters the chain as a Python dictionary whose `latest_item_1a` and
-`prior_item_1a` keys are interpolated verbatim into the Step 3 user prompt. This is the only
-step that produces filing text; everything downstream derives from this retrieval, which means
-the accuracy of the entire analysis is bounded by the quality of the extraction here.
+`prior_item_1a` keys are interpolated verbatim into the Step 3 user prompt.
 
 The second tool is the Tavily search API, used in Step 5. Tavily was chosen over raw
 DuckDuckGo scraping as the primary source because it returns structured JSON with explicit
 publication dates, which the confidence rubric in Step 6 needs to distinguish sources from the
-last six months from older coverage. When Tavily is unavailable (quota exhausted or key
-absent), the step falls back to DuckDuckGo HTML scraping, which provides headlines and
-snippets but no publication dates, causing all resulting evidence to be rated Medium rather
-than potentially High. The fallback is transparent: it logs a warning to `state.errors` so the
+last six months from older coverage. The fallback is transparent: it logs a warning to `state.errors` so the
 user sees it in the CLI summary and in the state JSON.
 
 ---
