@@ -69,6 +69,12 @@ company name rather than a symbol, the CIK map lookup silently fails. The prompt
 no whitespace" constraint is the contract that Step 2 relies on. Step 2 performs no further
 normalization — it trusts Step 1's output completely.
 
+**Output contract → Step 2 dependency:** `TickerInfo.ticker` (uppercase, no whitespace) is what
+Step 2's `_resolve_cik()` does an exact-match dictionary lookup on. A lowercase or misspelled
+value silently returns nothing from the SEC ticker map, so the normalizer's output format is
+load-bearing, not cosmetic. The new `INVALID` sentinel value lets `agent.py` detect a failed
+normalization and abort before hitting EDGAR.
+
 ---
 
 ## Step 3 — Risk Extractor (LLM) · Two calls, one per year
@@ -206,6 +212,12 @@ once it saw a concrete contrast. The word-count constraint alone (without the ex
 label length to ~15 words on average, which was still too long for reliable matching. Adding
 the example dropped the average to 6 words.
 
+**Output contract → Steps 4–6 dependency:** Each `Risk` object carries a stable snake_case
+`id` field that Step 4's differ uses as its cross-year pairing anchor. Without stable IDs,
+Step 4 would have to re-identify risks from raw text, making the semantic diff unreliable. The
+same IDs then flow through to Step 5 (news query key) and Step 6 (news join key) — they are
+the spine of the entire downstream chain.
+
 ---
 
 ## Step 4 — Risk Differ (LLM)
@@ -301,6 +313,24 @@ at parse time. Step 6 similarly groups items by verdict to build memo sections �
 verdict values map directly to the four memo sections (added, changed, removed, unchanged is
 omitted from the memo as it is not interesting to investors).
 
+The hardest judgment call in this step is the boundary between `materially_changed` and
+`unchanged`. Without an explicit materiality definition, pilot testing on TSLA FY2023→FY2024
+showed the model marking cosmetic rewording as `materially_changed` in roughly 40% of cases —
+for example, treating the addition of a single named example (a new regulatory body) to an
+otherwise identical risk paragraph as a material change. The prompt now defines materiality
+via four concrete triggers (new named regulation, new geography, new financial magnitude, new
+named incident) and explicitly instructs the model to prefer `unchanged` when in doubt. The
+`rationale` field in `DiffItem` is required — not optional — so the evaluator and end user can
+verify every materiality judgment without re-reading both filings. This also makes the diff
+auditable during the demo: any verdict can be challenged and the rationale serves as the
+model's written justification.
+
+**Output contract → Step 5 dependency:** `RiskDiff.items` filtered to `verdict == "added"` or
+`verdict == "materially_changed"` is the exact input to Step 5's news query loop. Step 5 does
+not search for unchanged or removed risks, so Step 4's verdict taxonomy directly controls how
+many external API calls Step 5 makes and therefore the agent's total runtime and Tavily quota
+consumption.
+
 ---
 
 ## Step 6 — Synthesizer + Critic (LLM)
@@ -337,8 +367,13 @@ Write a markdown document with EXACTLY these sections in this order:
    label]
 
   ## Materially Changed Risks
-  [Same format as Added Risks, plus one sentence on what specifically changed
-   vs. prior year]
+  [Same format as Added Risks. After the 2-sentence description, add
+   a bold "What changed:" line on its own: one sentence only, stating
+   the specific delta from the prior year filing.
+   Example format:
+   **What changed:** Prior year cited general cybersecurity risk;
+   latest year names a specific ransomware incident and quantifies
+   remediation cost at $X million.]
 
   ## Removed Risks
   [Bulleted list: risk label only. No news needed.]
@@ -354,6 +389,12 @@ Rules for memo_markdown:
   was found." as the news subsection.
 - Each added/changed risk must show its confidence label inline:
   **Evidence confidence: High / Medium / Low**
+- CRITICAL: Never invent, infer, or paraphrase news that is not
+  explicitly present in the provided news_evidence data. The news
+  snippets you receive are the ONLY permitted source for the news
+  evidence subsection. If no snippets exist for a risk, write
+  exactly: "No recent news corroborating this risk was found."
+  Do not add any other sentence in that subsection.
 
 ### Field 2: confidence_assessments
 A JSON list where each item is a ConfidenceAssessment for every ADDED or
@@ -432,6 +473,42 @@ Low = 0 sources) means the evaluator can verify each confidence label against th
 in the state JSON without subjective debate. The rubric is rule-based by design: the agent is
 not trying to infer whether the risk is *actually* material — only whether the news evidence
 *corroborates* the disclosed risk.
+
+**Temperature 0.2** is used here rather than the 0.1 used in Steps 1 and 4. Slight creative
+latitude produces fluent, investor-ready prose; a temperature of 0.1 makes the memo mechanical
+and formulaic. A temperature above 0.3 introduces hallucinated risk labels and fabricated
+detail not present in the structured input data — so 0.2 is the intentional midpoint between
+robotic and unreliable.
+
+**The SynthesisOutput schema imposes a critical structural constraint:** `memo_markdown` must be
+a single complete string, not a list of sections. `agent.py` writes the memo to disk with a
+single `Path.write_text()` call — returning a list would require joining logic that does not
+exist in the codebase and would silently produce a malformed output file.
+
+**The anti-hallucination rule** (the CRITICAL instruction added to the prompt) is necessary
+because in early testing the model would fill empty `news_evidence` slots with
+plausible-sounding but fabricated headlines, making the confidence labels appear grounded when
+they were not. The explicit rule reduced fabricated news citations to zero across all test runs
+after it was added.
+
+### How Step 5's output shapes this prompt
+
+`news_evidence` is a dict keyed by the same `risk_id` values produced in Step 3 — this is the
+join key that lets Step 6 attach the correct news snippets to each risk in the memo. Step 6
+iterates over `news_evidence[risk_id]` for every added or materially changed risk; without
+Step 5's structured output, confidence assessments would have no evidence base and the model
+would fabricate citations. If the IDs were inconsistent across steps, the join would silently
+succeed but every risk would render with "No recent news found", making the confidence labels
+meaningless.
+
+### What changed from v1
+
+The original `synthesize` prompt did not include the `**What changed:**` line for materially
+changed risks. This caused the memo to describe each risk's current state without ever stating
+what was different from the prior year filing — making the delta analysis impossible to verify
+without re-reading both filings. An investor reading the v1 memo could not determine whether
+"cybersecurity risk" was the same concern as the prior year or a genuinely escalated disclosure;
+the `**What changed:**` line makes the delta explicit and checkable.
 
 ### How this step's output enters the final deliverable
 

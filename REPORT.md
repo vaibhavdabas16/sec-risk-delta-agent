@@ -46,9 +46,8 @@ user as a warning rather than a cryptic API failure.
 
 **Step 2 (Tool — SEC EDGAR Fetcher)** uses the normalised ticker to query the SEC's public
 submissions API, retrieves the two most recent 10-K filings, fetches their HTML, and extracts
-the Item 1A (Risk Factors) section via regex anchors. The output is a dictionary containing
-the raw text of both years' risk sections, the filing years, and the source URLs. This step
-is a tool call and not an LLM call because the agent cannot hallucinate filing text: it must
+the Item 1A (Risk Factors) section via regex anchors. This step is a tool call and not an LLM
+call because the agent cannot hallucinate filing text: it must
 retrieve the actual document from EDGAR. The tool also implements exponential-backoff retry
 logic for EDGAR's 429 rate-limit responses and falls back gracefully when a company has only
 one 10-K (recent IPOs), flagging a degraded-mode run rather than aborting.
@@ -76,8 +75,7 @@ where both objectives suffer.
 **Step 5 (Tool — News Search)** reads the diff output, filters to risks with verdict "added"
 or "materially\_changed", and issues one news search query per risk against the Tavily API
 (with a DuckDuckGo HTML scraping fallback if the Tavily key is absent or the quota is
-exhausted). The results — headline, URL, snippet, and publication date — are stored in the
-agent state keyed by risk ID. This step is a tool call because the LLM has no access to
+exhausted). This step is a tool call because the LLM has no access to
 current events: asking it to produce news evidence would produce hallucinated citations.
 
 **Step 6 (LLM — Synthesizer + Critic)** receives the entire accumulated state — company

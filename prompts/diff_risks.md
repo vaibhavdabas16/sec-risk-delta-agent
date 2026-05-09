@@ -38,6 +38,8 @@ Verdict definitions (pick exactly one per item):
 - `materially_changed`: risk appears in BOTH years but the latest wording
   indicates a substantive change in scope, severity, named examples, or
   regulatory framing. Cosmetic rewording alone is NOT material change.
+  When in doubt between `materially_changed` and `unchanged`, prefer
+  `unchanged` and explain the similarity in the rationale field.
 - `unchanged`: risk appears in both years with only cosmetic differences
   (sentence order, minor word substitution, formatting).
 
@@ -46,6 +48,19 @@ Rules:
    "autonomous driving liability" and "self-driving vehicle legal exposure" are
    the SAME risk. A risk about "EV battery supply" and "raw material sourcing"
    are different risks.
+1b. Materiality threshold: a risk is `materially_changed` only if the
+    latest wording introduces at least ONE of the following:
+    - A NEW named regulation, law, or enforcement body not in the
+      prior year (e.g. EU AI Act, FTC consent decree)
+    - A NEW geographic scope or market (e.g. prior year said "US
+      operations", latest adds "China operations")
+    - A NEW financial magnitude or quantified exposure (e.g. prior
+      year was qualitative, latest names a dollar figure or
+      percentage)
+    - A NEW named event or incident (e.g. a specific data breach,
+      a named lawsuit, a product recall)
+    Adding or removing one named example while the core concern is
+    identical = `unchanged`, not `materially_changed`.
 2. Every risk from BOTH arrays must appear in exactly one DiffItem.
 3. For `added`: set latest_risk_id, leave prior_risk_id null.
 4. For `removed`: set prior_risk_id, leave latest_risk_id null.

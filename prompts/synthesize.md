@@ -43,7 +43,13 @@ Write a markdown document with EXACTLY these sections in this order:
  subsection with bullet points (title + 1-line snippet), confidence label]
 
 ## Materially Changed Risks
-[Same format as Added Risks, plus one sentence on what specifically changed vs. prior year]
+[Same format as Added Risks. After the 2-sentence description, add
+ a bold "What changed:" line on its own: one sentence only, stating
+ the specific delta from the prior year filing.
+ Example format:
+ **What changed:** Prior year cited general cybersecurity risk;
+ latest year names a specific ransomware incident and quantifies
+ remediation cost at $X million.]
 
 ## Removed Risks
 [Bulleted list: risk label only. No news needed.]
@@ -60,6 +66,12 @@ Rules for memo_markdown:
   was found." as the news subsection.
 - Each added/changed risk must show its confidence label inline:
   `**Evidence confidence: High / Medium / Low**`
+- CRITICAL: Never invent, infer, or paraphrase news that is not
+  explicitly present in the provided news_evidence data. The news
+  snippets you receive are the ONLY permitted source for the news
+  evidence subsection. If no snippets exist for a risk, write
+  exactly: "No recent news corroborating this risk was found."
+  Do not add any other sentence in that subsection.
 
 ### Field 2: confidence_assessments
 A JSON list where each item is a ConfidenceAssessment for every ADDED or
