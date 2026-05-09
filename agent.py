@@ -189,6 +189,16 @@ def main() -> None:
 
     print(f"  → {_ticker_summary(state)}")
 
+    # Hard abort if LLM flagged input as not a stock identifier
+    if state.ticker_info and state.ticker_info.ticker == "INVALID":
+        print(
+            f"\n{RED}Error: {raw_input!r} does not look like a stock ticker "
+            f"or company name.{RESET}\n"
+            f"Examples of valid input: {CYAN}AAPL{RESET}, {CYAN}TSLA{RESET}, "
+            f"{CYAN}Apple{RESET}, {CYAN}Microsoft{RESET}."
+        )
+        sys.exit(1)
+
     # Warn if Step 1 was uncertain — ticker may not resolve correctly
     if state.ticker_info and state.ticker_info.confidence == "low":
         print(

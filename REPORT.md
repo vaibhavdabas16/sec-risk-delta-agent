@@ -39,18 +39,13 @@ as part of its input context; no step can execute without the output of the step
 `TickerInfo` object containing a canonical uppercase ticker, the full company name, and a
 confidence level. This step exists because every downstream step depends on an unambiguous,
 uppercase ticker: the SEC EDGAR CIK lookup in Step 2 performs an exact-match dictionary lookup
-and silently returns nothing for a lowercase or misspelled symbol. By handling normalisation
-in a dedicated LLM call, the agent can accept natural input like "apple", "Tesla Inc", or
-"teslla" and resolve it reliably, with a confidence field that surfaces uncertainty to the
-user as a warning rather than a cryptic API failure.
+and silently returns nothing for a lowercase or misspelled symbol.
 
 **Step 2 (Tool — SEC EDGAR Fetcher)** uses the normalised ticker to query the SEC's public
 submissions API, retrieves the two most recent 10-K filings, fetches their HTML, and extracts
 the Item 1A (Risk Factors) section via regex anchors. This step is a tool call and not an LLM
 call because the agent cannot hallucinate filing text: it must
-retrieve the actual document from EDGAR. The tool also implements exponential-backoff retry
-logic for EDGAR's 429 rate-limit responses and falls back gracefully when a company has only
-one 10-K (recent IPOs), flagging a degraded-mode run rather than aborting.
+retrieve the actual document from EDGAR.
 
 **Step 3 (LLM — Risk Extractor)** makes two sequential LLM calls — one for each year's Item
 1A text — and atomises the prose into a typed list of `Risk` objects: one discrete concern per
@@ -64,9 +59,7 @@ two-step design reduced spurious additions to zero on the same input.
 **Step 4 (LLM — Differ)** receives the two typed Risk arrays and produces a `RiskDiff`:
 for every risk in either year, it assigns a verdict (added, removed, materially\_changed, or
 unchanged), pairs risks across years by semantic content rather than string similarity, and
-writes a one-to-two-sentence rationale for each verdict. The rationale field is not decorative:
-it allows the evaluator and the user to verify the model's reasoning without re-reading both
-filings, and it surfaces cases where the model's judgment is uncertain. Step 4 is separate
+writes a one-to-two-sentence rationale for each verdict. Step 4 is separate
 from Step 3 because semantic comparison across two years requires the risks to already be in
 atomic, short-label form; giving Step 4 raw regulatory prose would require it to simultaneously
 parse two years of dense text and reason about cross-year equivalence — a multi-objective task
@@ -82,9 +75,7 @@ current events: asking it to produce news evidence would produce hallucinated ci
 metadata, filing years, the full diff with rationales, and the news evidence — and produces
 two outputs in a single call: the formatted investor-ready markdown memo and a structured list
 of confidence assessments (High, Medium, or Low) for each material risk, based on an explicit
-rubric applied to the news evidence. Combining memo generation and confidence labelling in one
-call is deliberate: both tasks operate on the same news snippets, and a separate critic call
-would re-read identical context with no new information, adding latency and token cost.
+rubric applied to the news evidence.
 
 ---
 
@@ -131,12 +122,6 @@ Foreign companies that list in the US but file 20-F forms rather than 10-K forms
 ASML, Shell, and most other non-US issuers) are not supported. The agent returns a clear error
 message when no 10-K filings are found for a given ticker, but it does not attempt to parse
 the 20-F format, which uses different section numbering (Item 3D rather than Item 1A).
-
-The news search in Step 5 constructs queries from risk labels. For abstract labels like
-"macroeconomic uncertainty" or "regulatory changes," these keyword queries often return
-tangential articles that mention the company without actually addressing the specific risk,
-producing Low confidence assessments that may understate actual news corroboration, and
-occasionally returning unrelated results that the synthesizer incorrectly cites as evidence.
 
 ---
 

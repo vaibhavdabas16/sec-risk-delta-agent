@@ -148,7 +148,8 @@ route it correctly). Leave `prior_year_risks` as an empty array.
 
 ```
 Extract all atomic risk factors from this SEC 10-K Item 1A (Risk Factors)
-section for fiscal year {year}.
+section for fiscal year {year}. Return all results in the
+`latest_year_risks` field and leave `prior_year_risks` as an empty array.
 
 TEXT:
 {item1a_text[:60000]}
@@ -317,15 +318,28 @@ Return only a valid RiskDiff JSON. No preamble or explanation outside the JSON.
 ```
 Compare the risk factors from {prior_year} (prior) and {latest_year} (latest).
 
-PRIOR YEAR RISKS ({prior_year}):
+PRIOR YEAR RISKS ({prior_year}) — {prior_count} total:
 {prior_risks_as_json}
 
-LATEST YEAR RISKS ({latest_year}):
+LATEST YEAR RISKS ({latest_year}) — {latest_count} total:
 {latest_risks_as_json}
 
-Produce a RiskDiff JSON matching risks across years and classifying each as:
-added, removed, materially_changed, or unchanged.
+IMPORTANT: All {prior_count} prior-year risks and all {latest_count}
+latest-year risks must appear in your output. Do not skip or omit any risk.
+
+Classify each risk as: added, removed, materially_changed, or unchanged.
+Apply the materiality threshold from your instructions strictly: a risk is
+materially_changed only if it introduces a new named regulation, new geography,
+new financial magnitude, or new named incident. Cosmetic rewording = unchanged.
+When in doubt, choose unchanged.
+
+Return only a valid RiskDiff JSON. No preamble.
 ```
+
+*(The count variables `{prior_count}` and `{latest_count}` are injected at runtime from
+`len(extracted.prior_year_risks)` and `len(extracted.latest_year_risks)`. They anchor the
+model's completeness obligation to the exact number of risks it received, preventing silent
+omissions under context pressure.)*
 
 ### Why this prompt is shaped this way
 
