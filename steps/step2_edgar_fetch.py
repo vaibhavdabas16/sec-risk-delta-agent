@@ -150,30 +150,31 @@ def _extract_item1a(html: str) -> str:
         r"ITEM\s+2[\.\s]",
     ]
 
-    start_match = None
+    # Collect all start matches across all patterns and try each in order,
+    # skipping TOC entries (too short to be the real section).
+    all_starts: list[re.Match] = []
     for pat in patterns_start:
-        m = re.search(pat, clean, re.IGNORECASE)
-        if m:
-            start_match = m
-            break
+        all_starts.extend(re.finditer(pat, clean, re.IGNORECASE))
+    all_starts.sort(key=lambda m: m.start())
 
-    if not start_match:
-        return ""
+    for start_match in all_starts:
+        end_match = None
+        for pat in patterns_end:
+            m = re.search(pat, clean[start_match.end():], re.IGNORECASE)
+            if m:
+                end_match = m
+                break
 
-    end_match = None
-    for pat in patterns_end:
-        m = re.search(pat, clean[start_match.end():], re.IGNORECASE)
-        if m:
-            end_match = m
-            break
+        if end_match:
+            section = clean[start_match.start(): start_match.end() + end_match.start()]
+        else:
+            section = clean[start_match.start(): start_match.start() + 80000]
 
-    if end_match:
-        section = clean[start_match.start(): start_match.end() + end_match.start()]
-    else:
-        # Take up to 80k chars after start as fallback
-        section = clean[start_match.start(): start_match.start() + 80000]
+        # Skip table-of-contents hits — real sections are substantially longer
+        if len(section.strip()) > 500:
+            return section.strip()
 
-    return section.strip()
+    return ""
 
 
 def run(state: AgentState, debug_log: list | None = None) -> AgentState:

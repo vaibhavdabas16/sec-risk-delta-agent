@@ -11,6 +11,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+# Ensure Unicode symbols (✓ ✗) render correctly on Windows terminals
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 load_dotenv(override=True)
 
 # Ensure the project root is on sys.path so step imports work
