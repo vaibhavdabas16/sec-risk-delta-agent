@@ -105,6 +105,19 @@ headings that cause the anchors to miss. In these cases the extractor logs a war
 back to the first 60,000 characters of the document, which may contain boilerplate before the
 risk section begins, degrading Step 3's extraction quality.
 
+A related extraction failure was discovered during testing on large-cap
+companies: the original extractor used re.search(), which returns the
+first match of "Item 1A" in the document. Filings for companies such
+as MSFT and AMZN contain a table of contents near the top of the HTML
+document where "Item 1A" appears as a short navigation entry (~24
+characters). The extractor matched this entry, found the next section
+boundary immediately after, and returned near-empty text — causing
+Step 3 to extract zero risks. The fix (collecting all matches and
+skipping any that produce fewer than 500 characters) is robust for the
+companies tested, but non-standard filing layouts could still produce
+matches where the real section is just barely above or below the
+threshold.
+
 Foreign companies that list in the US but file 20-F forms rather than 10-K forms (Toyota,
 ASML, Shell, and most other non-US issuers) are not supported. The agent returns a clear error
 message when no 10-K filings are found for a given ticker, but it does not attempt to parse
@@ -136,6 +149,38 @@ already-structured data is compared or synthesised). The v1-to-v2 iteration on t
 prompt, documented in the Prompt Design Appendix, reduced spurious diff items on the TSLA
 test case from seventeen to zero — a more significant improvement than any version of the diff
 prompt achieved on its own.
+
+Testing the agent against five real companies (MSFT, GOOGL, TSLA,
+AMZN, JPM) exposed three bugs that were not visible in unit tests.
+The table-of-contents extraction bug only appeared on large filers
+whose HTML documents contain a navigation section before the actual
+filing body — MSFT was the first company tested and immediately
+returned zero risks, revealing the issue. The rate-limit failure only
+appeared when running multiple companies in parallel, because Step 3
+makes two sequential ~15k-token calls; a single-company run never
+approached the TPM limit. The Windows Unicode crash only appeared when
+a step failed during that parallel run, because the crash path
+(printing ✗) was never exercised in earlier testing. This suggests
+that multi-company parallel execution should be part of any future
+test harness, as it creates conditions — rate pressure, failure paths,
+encoding edge cases — that single sequential runs do not.
+
+An LLM (Claude) was used in a limited and specific capacity during
+development. The agent's domain (SEC 10-K risk delta analysis), the
+six-step chain architecture, the choice of tool calls at Steps 2 and
+5, the Pydantic state design, and all prompt engineering decisions
+were conceived and designed independently. The LLM was used only for
+two low-level tasks: generating boilerplate code (initial Pydantic
+model field definitions, argparse setup, file I/O scaffolding) and
+assisting with debugging specific errors (the Windows Unicode crash
+and the regex match logic for the TOC bug). In both cases the
+generated output required correction — the Pydantic boilerplate
+omitted the add_error() helper and to_json() serialiser entirely,
+and the regex suggestion anchored on "Item 1A." with a mandatory
+period, missing the uppercase ITEM 1A variant used by several large
+filers. The chain design, step decomposition, prompt iteration
+strategy, and all architectural decisions throughout this project
+reflect independent reasoning, not LLM-generated suggestions.
 
 ---
 
