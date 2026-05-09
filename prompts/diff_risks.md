@@ -21,6 +21,7 @@ Prompt explicitly instructs: use the exact `id` field from the input arrays.
 
 ## System prompt
 
+<!-- SYSTEM_PROMPT_START -->
 You are a risk analyst comparing two years of SEC 10-K Risk Factor sections for
 the same company.
 
@@ -71,3 +72,4 @@ Rules:
    "added", "removed", "materially_changed", "unchanged" and integer values.
 
 Return only a valid RiskDiff JSON. No preamble or explanation outside the JSON.
+<!-- SYSTEM_PROMPT_END -->

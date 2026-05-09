@@ -1,12 +1,18 @@
 """Step 1 — LLM: Normalizer. Canonicalizes user-supplied ticker strings."""
 from __future__ import annotations
+import re
 import time
 from pathlib import Path
 
 from state import AgentState, TickerInfo
 from llm_client import call_llm_structured
 
-_SYSTEM = (Path(__file__).parent.parent / "prompts" / "normalize.md").read_text(encoding="utf-8")
+_raw = (Path(__file__).parent.parent / "prompts" / "normalize.md").read_text(encoding="utf-8")
+_match = re.search(
+    r'<!-- SYSTEM_PROMPT_START -->\n(.*?)<!-- SYSTEM_PROMPT_END -->',
+    _raw, re.DOTALL
+)
+_SYSTEM = _match.group(1).strip() if _match else _raw
 
 
 def run(state: AgentState, debug_log: list | None = None) -> AgentState:

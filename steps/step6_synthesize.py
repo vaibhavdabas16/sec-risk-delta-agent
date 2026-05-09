@@ -1,6 +1,7 @@
 """Step 6 — LLM: Synthesizer + Critic. Writes the final markdown memo and confidence labels."""
 from __future__ import annotations
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,12 @@ from pydantic import BaseModel
 from state import AgentState, ConfidenceAssessment
 from llm_client import call_llm_text, call_llm_structured
 
-_SYSTEM = (Path(__file__).parent.parent / "prompts" / "synthesize.md").read_text(encoding="utf-8")
+_raw = (Path(__file__).parent.parent / "prompts" / "synthesize.md").read_text(encoding="utf-8")
+_match = re.search(
+    r'<!-- SYSTEM_PROMPT_START -->\n(.*?)<!-- SYSTEM_PROMPT_END -->',
+    _raw, re.DOTALL
+)
+_SYSTEM = _match.group(1).strip() if _match else _raw
 
 
 class SynthesisOutput(BaseModel):
@@ -100,7 +106,9 @@ def run(state: AgentState, debug_log: list | None = None) -> AgentState:
         "produce a confidence_assessments JSON list.\n\n"
         f"{context}\n\n"
         "Return a SynthesisOutput with:\n"
-        "1. memo_markdown: the full formatted markdown memo\n"
+        "1. memo_markdown: the complete formatted markdown memo — "
+        "include every added, changed, and removed risk. "
+        "Do not truncate, summarize, or use ellipses.\n"
         "2. confidence_assessments: list of {risk_id, confidence, justification} for each "
         "added or materially_changed risk"
     )

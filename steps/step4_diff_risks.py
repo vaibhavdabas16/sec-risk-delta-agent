@@ -1,13 +1,19 @@
 """Step 4 — LLM: Differ. Semantically matches risks across years and classifies changes."""
 from __future__ import annotations
 import json
+import re
 import time
 from pathlib import Path
 
 from state import AgentState, DiffItem, RiskDiff, SummaryCounts
 from llm_client import call_llm_structured
 
-_SYSTEM = (Path(__file__).parent.parent / "prompts" / "diff_risks.md").read_text(encoding="utf-8")
+_raw = (Path(__file__).parent.parent / "prompts" / "diff_risks.md").read_text(encoding="utf-8")
+_match = re.search(
+    r'<!-- SYSTEM_PROMPT_START -->\n(.*?)<!-- SYSTEM_PROMPT_END -->',
+    _raw, re.DOTALL
+)
+_SYSTEM = _match.group(1).strip() if _match else _raw
 
 
 def run(state: AgentState, debug_log: list | None = None) -> AgentState:
@@ -40,12 +46,27 @@ def run(state: AgentState, debug_log: list | None = None) -> AgentState:
     latest_year = state.edgar["latest_year"] if state.edgar else "latest"
     prior_year = state.edgar.get("prior_year", "prior") if state.edgar else "prior"
 
+    prior_count = len(extracted.prior_year_risks)
+    latest_count = len(extracted.latest_year_risks)
+
     user_prompt = (
-        f"Compare the risk factors from {prior_year} (prior) and {latest_year} (latest).\n\n"
-        f"PRIOR YEAR RISKS ({prior_year}):\n{prior_json}\n\n"
-        f"LATEST YEAR RISKS ({latest_year}):\n{latest_json}\n\n"
-        "Produce a RiskDiff JSON matching risks across years and classifying each as: "
-        "added, removed, materially_changed, or unchanged."
+        f"Compare the risk factors from {prior_year} (prior) "
+        f"and {latest_year} (latest).\n\n"
+        f"PRIOR YEAR RISKS ({prior_year}) — {prior_count} total:\n"
+        f"{prior_json}\n\n"
+        f"LATEST YEAR RISKS ({latest_year}) — {latest_count} total:\n"
+        f"{latest_json}\n\n"
+        f"IMPORTANT: All {prior_count} prior-year risks and all "
+        f"{latest_count} latest-year risks must appear in your output. "
+        f"Do not skip or omit any risk.\n\n"
+        "Classify each risk as: added, removed, materially_changed, "
+        "or unchanged.\n"
+        "Apply the materiality threshold from your instructions strictly: "
+        "a risk is materially_changed only if it introduces a new named "
+        "regulation, new geography, new financial magnitude, or new named "
+        "incident. Cosmetic rewording = unchanged. When in doubt, choose "
+        "unchanged.\n\n"
+        "Return only a valid RiskDiff JSON. No preamble."
     )
 
     diff = call_llm_structured(

@@ -11,6 +11,29 @@ Tool steps are not documented here because they make no LLM calls.
 
 ---
 
+## Prompt loading architecture
+
+Each `.md` file contains both human-readable documentation (rationale, constraint notes,
+iteration history) and the actual system prompt sent to the LLM. The system prompt is
+delimited by `<!-- SYSTEM_PROMPT_START -->` and `<!-- SYSTEM_PROMPT_END -->` HTML comment
+sentinels. Each step's `.py` file uses a regex slice to extract only the operational prompt:
+
+```python
+_match = re.search(
+    r'<!-- SYSTEM_PROMPT_START -->\n(.*?)<!-- SYSTEM_PROMPT_END -->',
+    _raw, re.DOTALL
+)
+_SYSTEM = _match.group(1).strip() if _match else _raw
+```
+
+This ensures the LLM receives only its instructions — not developer notes like "Why this
+prompt is shaped this way" or "make grading easy" — while keeping documentation and
+operational prompts co-located in a single source-of-truth file. If the sentinels are ever
+missing (e.g. a new prompt file that hasn't been wrapped yet), the fallback `else _raw` loads
+the entire file, so nothing breaks silently.
+
+---
+
 ## Step 1 — Normalizer (LLM)
 
 ### Role in the chain
@@ -24,6 +47,11 @@ You are a financial data normalizer. Your job is to convert a user-supplied stoc
 into a canonical stock ticker and company name for US-listed securities.
 
 Rules:
+0. If the input is clearly not a stock identifier — it reads as a sentence, a question, a SQL
+   query, a command, or any natural language phrase that has no plausible mapping to a
+   US-listed equity — set ticker to "INVALID", company_name to "Unknown", and confidence to
+   "low". Do not attempt to map it to a ticker. The downstream system will detect
+   confidence=low and ticker=INVALID and abort with a user-friendly error.
 - Normalize the ticker to uppercase with no whitespace.
 - If the user supplied a company name instead of a ticker (e.g., "Tesla" → "TSLA"), resolve it.
 - If you are highly confident in the mapping, set confidence to "high".
@@ -31,6 +59,9 @@ Rules:
 - If the input is ambiguous or unclear, set confidence to "low" and use your best guess.
 - Always return a valid TickerInfo JSON. Never refuse.
 - Focus on US equity tickers listed on NYSE, NASDAQ, or AMEX.
+- If the input looks like a non-US exchange code (contains a dot followed by a country suffix,
+  e.g. "7203.T", "ASML.AS") set confidence to "low" and note in company_name that this
+  appears to be a foreign listing not covered by SEC EDGAR.
 
 Return ONLY a JSON object matching the TickerInfo schema.
 ```
@@ -247,6 +278,8 @@ Verdict definitions (pick exactly one per item):
 - `materially_changed`: risk appears in BOTH years but the latest wording
   indicates a substantive change in scope, severity, named examples, or
   regulatory framing. Cosmetic rewording alone is NOT material change.
+  When in doubt between `materially_changed` and `unchanged`, prefer
+  `unchanged` and explain the similarity in the rationale field.
 - `unchanged`: risk appears in both years with only cosmetic differences
   (sentence order, minor word substitution, formatting).
 
@@ -255,6 +288,18 @@ Rules:
    "autonomous driving liability" and "self-driving vehicle legal exposure" are
    the SAME risk. A risk about "EV battery supply" and "raw material sourcing"
    are different risks.
+1b. Materiality threshold: a risk is `materially_changed` only if the
+    latest wording introduces at least ONE of the following:
+    - A NEW named regulation, law, or enforcement body not in the
+      prior year (e.g. EU AI Act, FTC consent decree)
+    - A NEW geographic scope or market (e.g. prior year said "US
+      operations", latest adds "China operations")
+    - A NEW financial magnitude or quantified exposure (e.g. prior
+      year was qualitative, latest names a dollar figure or percentage)
+    - A NEW named event or incident (e.g. a specific data breach,
+      a named lawsuit, a product recall)
+    Adding or removing one named example while the core concern is
+    identical = `unchanged`, not `materially_changed`.
 2. Every risk from BOTH arrays must appear in exactly one DiffItem.
 3. For `added`: set latest_risk_id, leave prior_risk_id null.
 4. For `removed`: set prior_risk_id, leave latest_risk_id null.

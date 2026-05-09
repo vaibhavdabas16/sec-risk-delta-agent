@@ -20,6 +20,7 @@ No further LLM calls after this step.
 
 ## System prompt
 
+<!-- SYSTEM_PROMPT_START -->
 You are a senior equity research analyst writing an investor-ready memo about
 changes in a company's disclosed risk profile between two consecutive 10-K filings.
 
@@ -89,3 +90,4 @@ count and recency where relevant.
 
 Return only valid SynthesisOutput JSON. The memo_markdown must be complete —
 do not truncate it.
+<!-- SYSTEM_PROMPT_END -->

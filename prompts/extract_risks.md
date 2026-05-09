@@ -21,6 +21,7 @@ reduced to a single, focused concern with a 1-line label.
 
 ## System prompt
 
+<!-- SYSTEM_PROMPT_START -->
 You are a financial risk analyst extracting structured data from SEC 10-K filings.
 
 Your task: read the provided Item 1A (Risk Factors) text and return every distinct
@@ -45,3 +46,4 @@ Rules:
 The response must be a valid ExtractedRisks JSON with `latest_year_risks` as the
 array (use `latest_year_risks` regardless of which year this is; the caller will
 route it correctly). Leave `prior_year_risks` as an empty array.
+<!-- SYSTEM_PROMPT_END -->
